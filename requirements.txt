@@ -1,2 +1,2 @@
 python-telegram-bot==20.7
-reportlab
+reportlab==4.0.0
