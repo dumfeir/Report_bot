@@ -10,90 +10,178 @@ from telegram.ext import (
 )
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
-# Register English/Arabic supported font
-pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
-
-# Conversation states
-STUDENT_NAME, PROJECT_NAME, UNIVERSITY, COLLEGE, DEPARTMENT, STAGE, SUBJECT, PROFESSOR, REPORT_DESC = range(9)
+# تعريف حالات المحادثة
+(STUDENT, PROJECT, UNIVERSITY, COLLEGE, 
+ DEPARTMENT, LEVEL, COURSE, PROFESSOR, 
+ DESCRIPTION) = range(9)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("📌 Student Name:")
-    return STUDENT_NAME
+    await update.message.reply_text(
+        "📌 Please enter student full name:"
+    )
+    return STUDENT
 
-async def get_student_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['student_name'] = update.message.text
-    await update.message.reply_text("📌 Project Name:")
-    return PROJECT_NAME
+async def student_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['student'] = update.message.text
+    await update.message.reply_text(
+        "📌 Enter project title:"
+    )
+    return PROJECT
 
-async def get_project_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['project_name'] = update.message.text
-    await update.message.reply_text("🏛️ University (optional):")
+async def project_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['project'] = update.message.text
+    await update.message.reply_text(
+        "🏛️ Enter university name (optional):"
+    )
     return UNIVERSITY
 
-# ... [continue with other state handlers]
+async def university_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['university'] = update.message.text
+    await update.message.reply_text(
+        "🏫 Enter college/faculty name:"
+    )
+    return COLLEGE
 
-async def generate_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def college_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['college'] = update.message.text
+    await update.message.reply_text(
+        "📚 Enter department name:"
+    )
+    return DEPARTMENT
+
+async def department_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['department'] = update.message.text
+    await update.message.reply_text(
+        "📖 Enter academic level (e.g., Bachelor 4):"
+    )
+    return LEVEL
+
+async def academic_level(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['level'] = update.message.text
+    await update.message.reply_text(
+        "🧪 Enter course name:"
+    )
+    return COURSE
+
+async def course_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['course'] = update.message.text
+    await update.message.reply_text(
+        "👨‍🏫 Enter professor name (optional):"
+    )
+    return PROFESSOR
+
+async def professor_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['professor'] = update.message.text
+    await update.message.reply_text(
+        "📝 Enter report description and number of pages needed (e.g., 5 pages):"
+    )
+    return DESCRIPTION
+
+async def report_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['description'] = update.message.text
+    await generate_report(update, context)
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text(
+        "❌ Operation cancelled"
+    )
+    return ConversationHandler.END
+
+async def generate_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         filename = "academic_report.pdf"
-        c = canvas.Canvas(filename, pagesize=letter)
+        doc = SimpleDocTemplate(filename, pagesize=letter)
         
-        # Set English font
-        c.setFont("Arial", 12)
+        styles = getSampleStyleSheet()
+        story = []
         
         # Cover Page
-        c.drawString(100, 700, f"Academic Report: {context.user_data['project_name']}")
-        c.drawString(100, 680, f"Prepared by: {context.user_data['student_name']}")
+        story.append(Paragraph("ACADEMIC REPORT", styles['Title']))
+        story.append(Spacer(1, 24))
+        
+        story.append(Paragraph(f"<b>Project Title:</b> {context.user_data['project']}", styles['Normal']))
+        story.append(Paragraph(f"<b>Prepared by:</b> {context.user_data['student']}", styles['Normal']))
+        story.append(Spacer(1, 12))
+        
+        # Academic Information
+        info_items = [
+            ('University', context.user_data.get('university', 'N/A')),
+            ('College', context.user_data['college']),
+            ('Department', context.user_data['department']),
+            ('Level', context.user_data['level']),
+            ('Course', context.user_data['course']),
+            ('Professor', context.user_data.get('professor', 'N/A'))
+        ]
+        
+        for item in info_items:
+            story.append(Paragraph(f"<b>{item[0]}:</b> {item[1]}", styles['Normal']))
+            story.append(Spacer(1, 6))
         
         # Report Content
-        y_position = 650
-        c.drawString(100, y_position, f"University: {context.user_data.get('university', 'N/A')}")
-        y_position -= 20
-        c.drawString(100, y_position, f"College: {context.user_data['college']}")
-        y_position -= 20
-        # ... [add other fields]
+        story.append(Spacer(1, 24))
+        story.append(Paragraph("REPORT CONTENT", styles['Heading2']))
         
-        # Report pages
         try:
-            pages = max(1, int(''.join(filter(str.isdigit, context.user_data['report_desc'])))
+            pages = max(1, int(''.join(filter(str.isdigit, context.user_data['description']))))
         except:
             pages = 1
             
         for page in range(pages):
-            c.showPage()
-            c.setFont("Arial", 12)
-            c.drawString(100, 700, f"Report Page {page+1} of {pages}")
-            c.drawString(100, 680, context.user_data['report_desc'])
+            if page > 0:
+                story.append(Paragraph(f"Page {page+1}", styles['Heading3']))
+                story.append(Spacer(1, 12))
+            
+            story.append(Paragraph(context.user_data['description'], styles['Normal']))
+            if page < pages - 1:
+                story.append(PageBreak())
         
-        c.save()
+        doc.build(story)
         
         with open(filename, "rb") as file:
             await update.message.reply_document(
                 document=file,
-                caption="✅ Report generated successfully"
+                caption="✅ Your academic report has been generated successfully"
             )
         
         os.remove(filename)
+        
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        await update.message.reply_text(
+            f"❌ Error generating report: {str(e)}"
+        )
 
 if __name__ == "__main__":
     TOKEN = os.environ.get("BOT_TOKEN")
+    
+    if not TOKEN:
+        print("❌ Error: BOT_TOKEN environment variable is missing!")
+        exit(1)
     
     app = ApplicationBuilder().token(TOKEN).build()
     
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            STUDENT_NAME: [MessageHandler(filters.TEXT, get_student_name)],
-            PROJECT_NAME: [MessageHandler(filters.TEXT, get_project_name)],
-            # ... [other states]
+            STUDENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, student_name)],
+            PROJECT: [MessageHandler(filters.TEXT & ~filters.COMMAND, project_title)],
+            UNIVERSITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, university_name)],
+            COLLEGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, college_name)],
+            DEPARTMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, department_name)],
+            LEVEL: [MessageHandler(filters.TEXT & ~filters.COMMAND, academic_level)],
+            COURSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, course_name)],
+            PROFESSOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, professor_name)],
+            DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, report_description)]
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
     
     app.add_handler(conv_handler)
-    print("🚀 Bot is running...")
+    app.add_handler(CommandHandler("help", lambda u,c: u.message.reply_text("Use /start to begin creating your academic report")))
+    
+    print("🚀 Academic Report Bot is running...")
     app.run_polling()
